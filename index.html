@@ -226,7 +226,161 @@
       box-shadow: var(--shadow);
     }
 
-    #canvas {
+    #const fileInput = document.getElementById('fileInput');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const uploadArea = document.getElementById('uploadArea');
+const overlay = document.getElementById('processingOverlay');
+const status = document.getElementById('status');
+
+let originalImage = null;
+
+const sliders = [
+  'brightness',
+  'contrast',
+  'exposure',
+  'shadows',
+  'highlights',
+  'saturation',
+  'sharpness',
+  'clarity',
+  'vibrance',
+  'transparency'
+];
+
+// Atualizar valores de texto
+sliders.forEach(id => {
+  const slider = document.getElementById(id);
+  const valueLabel = document.getElementById(`${id}Value`);
+  slider.addEventListener('input', () => {
+    valueLabel.textContent = slider.value;
+    applyFilters();
+  });
+});
+
+// Upload da imagem
+fileInput.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    overlay.classList.add('active');
+    reader.onload = function(event) {
+      const img = new Image();
+      img.onload = function() {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        originalImage = img;
+        ctx.drawImage(img, 0, 0);
+        overlay.classList.remove('active');
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+// Drag & drop
+uploadArea.addEventListener('dragover', e => {
+  e.preventDefault();
+  uploadArea.classList.add('drag-over');
+});
+
+uploadArea.addEventListener('dragleave', () => {
+  uploadArea.classList.remove('drag-over');
+});
+
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  fileInput.files = e.dataTransfer.files;
+  fileInput.dispatchEvent(new Event('change'));
+});
+
+// Aplicar filtros
+function applyFilters() {
+  if (!originalImage) return;
+
+  ctx.drawImage(originalImage, 0, 0);
+
+  let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let data = imageData.data;
+
+  const brightness = +document.getElementById('brightness').value;
+  const contrast = +document.getElementById('contrast').value;
+  const exposure = +document.getElementById('exposure').value;
+  const saturation = +document.getElementById('saturation').value;
+
+  for (let i = 0; i < data.length; i += 4) {
+    // brilho + exposição
+    data[i] += brightness + exposure;     // Red
+    data[i+1] += brightness + exposure;   // Green
+    data[i+2] += brightness + exposure;   // Blue
+
+    // contraste simples
+    data[i] = truncate((data[i] - 128) * (contrast / 100 + 1) + 128);
+    data[i+1] = truncate((data[i+1] - 128) * (contrast / 100 + 1) + 128);
+    data[i+2] = truncate((data[i+2] - 128) * (contrast / 100 + 1) + 128);
+
+    // saturação (simples)
+    const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+    data[i] = truncate(data[i] + (data[i] - avg) * (saturation / 100));
+    data[i+1] = truncate(data[i+1] + (data[i+1] - avg) * (saturation / 100));
+    data[i+2] = truncate(data[i+2] + (data[i+2] - avg) * (saturation / 100));
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// Trunca valores para manter RGB válido
+function truncate(value) {
+  return Math.min(255, Math.max(0, value));
+}
+
+// Resetar sliders
+function resetControls() {
+  sliders.forEach(id => {
+    const slider = document.getElementById(id);
+    slider.value = 0;
+    document.getElementById(`${id}Value`).textContent = "0";
+  });
+  if (originalImage) {
+    ctx.drawImage(originalImage, 0, 0);
+  }
+}
+
+// Baixar imagem
+function downloadImage() {
+  const link = document.createElement('a');
+  link.download = 'imagem_editada.png';
+  link.href = canvas.toDataURL();
+  link.click();
+}
+
+// Presets
+function applyPreset(type) {
+  resetControls();
+
+  const presets = {
+    ultraLeve: { brightness: 20, contrast: 30, shadows: 100, highlights: -20, exposure: 10 },
+    leve: { brightness: 15, contrast: 20, shadows: 80 },
+    intermediario: { brightness: 10, contrast: 15, shadows: 50 },
+    pesado: { brightness: 5, contrast: 10 },
+    texto: { contrast: 50, brightness: -10, clarity: 30 },
+    translucido: { brightness: 40, contrast: 40, shadows: 150 }
+  };
+
+  const config = presets[type];
+  Object.entries(config).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.value = val;
+      document.getElementById(`${id}Value`).textContent = val;
+    }
+  });
+
+  applyFilters();
+}
       max-width: 100%;
       max-height: 70vh;
       border-radius: 15px;
